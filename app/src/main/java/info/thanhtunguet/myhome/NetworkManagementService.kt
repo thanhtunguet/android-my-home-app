@@ -49,6 +49,7 @@ class NetworkManagementService : Service() {
             json()
         }
     }
+    private val jsonIgnoreUnknown = Json { ignoreUnknownKeys = true }
     
     companion object {
         private const val TAG = "NetworkMgmtService" // Shortened tag name
@@ -201,7 +202,7 @@ class NetworkManagementService : Service() {
                     append("accept", "application/json")
                 }
             }.body()
-            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString(DnsResolveResponse.serializer(), responseText)
+            val parsed = jsonIgnoreUnknown.decodeFromString(DnsResolveResponse.serializer(), responseText)
             val answer = parsed.Answer?.firstOrNull { it.type == 1 }
             val ip = answer?.data?.trim()
             if (ip != null && isValidIpv4(ip)) ip else null

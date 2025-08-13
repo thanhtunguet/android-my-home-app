@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
         // Removed text Settings button in favor of top-right icon
         val btnClose = findViewById<Button>(R.id.btnClose)
         val btnSettingsIcon = findViewById<View>(R.id.btnSettingsIcon)
+        val btnOpenPlayStore = findViewById<Button>(R.id.btnOpenPlayStore)
+        val btnOpenApps = findViewById<Button>(R.id.btnOpenApps)
+        val btnOpenSystemSettings = findViewById<Button>(R.id.btnOpenSystemSettings)
 
         fun refreshUi() {
             tvPublicIp.text = ServiceStatus.currentPublicIp ?: "—"
@@ -87,6 +90,23 @@ class MainActivity : AppCompatActivity() {
 
         btnClose.setOnClickListener {
             finish()
+        }
+
+        btnOpenPlayStore.setOnClickListener {
+            // Try launch Play Store app
+            val pm = packageManager
+            val intent = pm.getLaunchIntentForPackage("com.android.vending")
+            if (intent != null) startActivity(intent) else startActivity(Intent(Intent.ACTION_VIEW).apply {
+                data = android.net.Uri.parse("https://play.google.com/store")
+            })
+        }
+
+        btnOpenApps.setOnClickListener {
+            startActivity(Intent(this, AppsActivity::class.java))
+        }
+
+        btnOpenSystemSettings.setOnClickListener {
+            startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
         }
     }
 

@@ -92,6 +92,8 @@ dependencies {
     implementation libs.ktor.client.cio
     implementation libs.ktor.client.content.negotiation
     implementation libs.ktor.serialization.kotlinx.json
+    // Silence SLF4J 2.x warnings from dependencies (e.g., ktor) with a NOP logger
+    implementation "org.slf4j:slf4j-nop:2.0.13"
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core

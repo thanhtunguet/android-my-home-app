@@ -75,20 +75,23 @@
             android:gravity="center">
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnTurnOn"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:text="Turn On"
-                android:layout_marginEnd="12dp" />
+                android:layout_marginEnd="8dp" />
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnTurnOff"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:text="Turn Off"
-                android:layout_marginEnd="12dp" />
+                android:layout_marginEnd="8dp" />
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCheckOnline"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:text="Check Online" />
         </LinearLayout>
         <com.google.android.material.button.MaterialButton
@@ -97,5 +100,32 @@
             android:layout_height="wrap_content"
             android:text="Close Dashboard"
             android:layout_marginTop="8dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="12dp">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenPlayStore"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Play Store"
+                android:layout_marginEnd="8dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenApps"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Apps"
+                android:layout_marginEnd="8dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenSystemSettings"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="System Settings" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
