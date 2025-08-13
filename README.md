@@ -7,16 +7,21 @@
 
 ## Configuration
 
-Environments:
+Use either environment variables or `local.properties` (Gradle reads env first, then falls back to `local.properties`). Do not quote values.
 
 ```dotenv
-# API Token for Cloudflare
-CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+# Cloudflare (choose ONE auth method)
+# 1) Preferred: Scoped API Token (must include Zone DNS:Edit for the zone)
+CLOUDFLARE_API_TOKEN=your_scoped_api_token
+# 2) Fallback: Global API Key (email + key)
+CLOUDFLARE_API_EMAIL=you@example.com
+CLOUDFLARE_API_KEY=your_global_api_key
+
 # Zone ID and Record ID for DNS management
 CLOUDFLARE_ZONE_ID=your_cloudflare_zone_id
 CLOUDFLARE_RECORD_ID=your_cloudflare_record_id
-# DNS record name to update
-CLOUDFLARE_RECORD_NAME="*.example.com"
+# DNS record name (FQDN) to update
+CLOUDFLARE_RECORD_NAME=example.yourdomain.com
 
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
@@ -25,6 +30,11 @@ PC_IP_ADDRESS=your_pc_ip_address
 PC_MAC_ADDRESS=your_pc_mac_address
 PC_SHUTDOWN_COMMAND=shutdown-my-pc
 ```
+
+Notes:
+- Values are loaded from environment variables; if empty, Gradle falls back to `local.properties` with the same keys.
+- Ensure `CLOUDFLARE_RECORD_ID` belongs to `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_RECORD_NAME` matches that record.
+- The app logs which Cloudflare auth method it uses at startup (token or global key).
 
 ## Roadmap
 

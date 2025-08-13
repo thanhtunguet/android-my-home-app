@@ -57,6 +57,12 @@ class NetworkManagementService : Service() {
     override fun onCreate() {
         super.onCreate()
         appConfig = AppConfig.fromBuildConfig()
+        // Log which Cloudflare auth method will be used (masked values)
+        val tokenPreview = if (appConfig.cloudflareApiToken.isNotEmpty()) appConfig.cloudflareApiToken.take(6) + "***" else "<empty>"
+        val keyPreview = if (appConfig.cloudflareApiKey.isNotEmpty()) appConfig.cloudflareApiKey.take(6) + "***" else "<empty>"
+        val emailPreview = if (appConfig.cloudflareApiEmail.isNotEmpty()) appConfig.cloudflareApiEmail else "<empty>"
+        val authMethod = if (appConfig.cloudflareApiToken.isNotEmpty()) "API_TOKEN" else if (appConfig.cloudflareApiKey.isNotEmpty()) "GLOBAL_KEY" else "NONE"
+        Log.d(TAG, "Cloudflare auth: method=$authMethod token=$tokenPreview key=$keyPreview email=$emailPreview")
         httpServer = HttpServer(appConfig)
         createNotificationChannel()
         startForeground(notificationId, createNotification())
@@ -170,25 +176,61 @@ class NetworkManagementService : Service() {
     
     private suspend fun updateDnsRecord(newIp: String) {
         try {
-            val response = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
+            val body = CloudflareDnsUpdateRequest(
+                name = appConfig.cloudflareRecordName,
+                content = newIp
+            )
+
+            // Attempt with API Token first if present, else with Global Key
+            val triedToken = appConfig.cloudflareApiToken.isNotEmpty()
+            val responsePrimary = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
                 headers {
-                    append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
                     append("Accept", "application/json")
+                    if (triedToken) {
+                        append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
+                    } else {
+                        if (appConfig.cloudflareApiEmail.isNotEmpty()) append("X-Auth-Email", appConfig.cloudflareApiEmail)
+                        if (appConfig.cloudflareApiKey.isNotEmpty()) append("X-Auth-Key", appConfig.cloudflareApiKey)
+                    }
                 }
                 contentType(ContentType.Application.Json)
-                setBody(
-                    CloudflareDnsUpdateRequest(
-                        name = appConfig.cloudflareRecordName,
-                        content = newIp
-                    )
-                )
+                setBody(body)
             }
-            
-            if (response.status == HttpStatusCode.OK) {
+
+            if (responsePrimary.status == HttpStatusCode.OK) {
                 Log.d(TAG, "DNS record updated successfully")
-            } else {
-                val errorBody = try { response.body<String>() } catch (e: Exception) { "<no body>" }
-                Log.e(TAG, "Failed to update DNS record: ${response.status} body=${errorBody}")
+                return
+            }
+
+            val primaryError = try { responsePrimary.body<String>() } catch (e: Exception) { "<no body>" }
+            Log.e(TAG, "Cloudflare update failed (primary ${responsePrimary.status}). body=${primaryError}")
+
+            val authError = primaryError.contains("\"code\":10001") || primaryError.contains("Unable to authenticate request", ignoreCase = true)
+            val canTryFallback = (triedToken && (appConfig.cloudflareApiEmail.isNotEmpty() || appConfig.cloudflareApiKey.isNotEmpty())) || (!triedToken && appConfig.cloudflareApiToken.isNotEmpty())
+            if (authError && canTryFallback) {
+                // Retry with the alternative auth method
+                val usingTokenNow = !triedToken
+                Log.d(TAG, "Retrying Cloudflare update with ${if (usingTokenNow) "API_TOKEN" else "GLOBAL_KEY"} auth")
+                val responseFallback = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
+                    headers {
+                        append("Accept", "application/json")
+                        if (usingTokenNow) {
+                            append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
+                        } else {
+                            if (appConfig.cloudflareApiEmail.isNotEmpty()) append("X-Auth-Email", appConfig.cloudflareApiEmail)
+                            if (appConfig.cloudflareApiKey.isNotEmpty()) append("X-Auth-Key", appConfig.cloudflareApiKey)
+                        }
+                    }
+                    contentType(ContentType.Application.Json)
+                    setBody(body)
+                }
+                if (responseFallback.status == HttpStatusCode.OK) {
+                    Log.d(TAG, "DNS record updated successfully (fallback auth)")
+                    return
+                } else {
+                    val fbErr = try { responseFallback.body<String>() } catch (e: Exception) { "<no body>" }
+                    Log.e(TAG, "Cloudflare update failed (fallback ${responseFallback.status}). body=${fbErr}")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating DNS record", e)

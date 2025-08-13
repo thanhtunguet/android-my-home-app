@@ -44,6 +44,8 @@ android {
         
         // BuildConfig fields populated from env vars, falling back to local.properties
         buildConfigField "String", "CLOUDFLARE_API_TOKEN", "\"${envOrProp('CLOUDFLARE_API_TOKEN')}\""
+        buildConfigField "String", "CLOUDFLARE_API_EMAIL", "\"${envOrProp('CLOUDFLARE_API_EMAIL')}\""
+        buildConfigField "String", "CLOUDFLARE_API_KEY", "\"${envOrProp('CLOUDFLARE_API_KEY')}\""
         buildConfigField "String", "CLOUDFLARE_ZONE_ID", "\"${envOrProp('CLOUDFLARE_ZONE_ID')}\""
         buildConfigField "String", "CLOUDFLARE_RECORD_ID", "\"${envOrProp('CLOUDFLARE_RECORD_ID')}\""
         buildConfigField "String", "CLOUDFLARE_RECORD_NAME", "\"${envOrProp('CLOUDFLARE_RECORD_NAME')}\""

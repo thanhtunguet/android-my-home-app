@@ -2,6 +2,8 @@ package info.thanhtunguet.myhome
 
 data class AppConfig(
     val cloudflareApiToken: String,
+    val cloudflareApiEmail: String,
+    val cloudflareApiKey: String,
     val cloudflareZoneId: String,
     val cloudflareRecordId: String,
     val cloudflareRecordName: String,
@@ -15,6 +17,8 @@ data class AppConfig(
         fun fromBuildConfig(): AppConfig {
             return AppConfig(
                 cloudflareApiToken = BuildConfig.CLOUDFLARE_API_TOKEN,
+                cloudflareApiEmail = BuildConfig.CLOUDFLARE_API_EMAIL,
+                cloudflareApiKey = BuildConfig.CLOUDFLARE_API_KEY,
                 cloudflareZoneId = BuildConfig.CLOUDFLARE_ZONE_ID,
                 cloudflareRecordId = BuildConfig.CLOUDFLARE_RECORD_ID,
                 cloudflareRecordName = BuildConfig.CLOUDFLARE_RECORD_NAME,
