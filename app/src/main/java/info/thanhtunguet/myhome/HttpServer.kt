@@ -182,7 +182,7 @@ class HttpServer(private val appConfig: AppConfig) {
         // Send shutdown command via TCP
         serverScope.launch {
             try {
-                val socket = Socket(appConfig.pcIpAddress, 8081) // Assuming PC listens on port 8081
+				val socket = Socket(appConfig.pcIpAddress, 10675)
                 val outputStream = socket.getOutputStream()
                 outputStream.write(appConfig.pcShutdownCommand.toByteArray())
                 outputStream.flush()
@@ -198,7 +198,7 @@ class HttpServer(private val appConfig: AppConfig) {
             try {
                 val socket = DatagramSocket()
                 val data = appConfig.pcShutdownCommand.toByteArray()
-                val packet = DatagramPacket(data, data.size, InetAddress.getByName(appConfig.pcIpAddress), 8081)
+				val packet = DatagramPacket(data, data.size, InetAddress.getByName(appConfig.pcIpAddress), 10675)
                 socket.send(packet)
                 socket.close()
                 Log.d(TAG, "Shutdown command sent via UDP")
@@ -208,29 +208,22 @@ class HttpServer(private val appConfig: AppConfig) {
         }
     }
     
-    private fun isPcOnline(): Boolean {
-        return try {
-            // Try SSH port first
-            var socket: Socket? = null
-            try {
-                socket = Socket(appConfig.pcIpAddress, 22)
-                return true
-            } catch (e: Exception) {
-                // SSH failed, try RDP
-                try {
-                    socket = Socket(appConfig.pcIpAddress, 3389)
-                    return true
-                } catch (e: Exception) {
-                    return false
-                }
-            } finally {
-                socket?.close()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking PC status", e)
-            false
-        }
-    }
+	private fun isPcOnline(): Boolean {
+		return try {
+			var socket: Socket? = null
+			try {
+				socket = Socket(appConfig.pcIpAddress, 3389)
+				true
+			} catch (e: Exception) {
+				false
+			} finally {
+				socket?.close()
+			}
+		} catch (e: Exception) {
+			Log.e(TAG, "Error checking PC status", e)
+			false
+		}
+	}
     
     private fun sendTelegramMessage(message: String) {
         serverScope.launch {

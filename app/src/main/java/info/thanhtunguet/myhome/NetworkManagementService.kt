@@ -33,7 +33,8 @@ data class CloudflareDnsUpdateRequest(
     val type: String = "A",
     val name: String,
     val content: String,
-    val ttl: Int = 120
+    val ttl: Int = 120,
+    val proxied: Boolean = false
 )
 
 class NetworkManagementService : Service() {
@@ -172,6 +173,7 @@ class NetworkManagementService : Service() {
             val response = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
                 headers {
                     append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
+                    append("Accept", "application/json")
                 }
                 contentType(ContentType.Application.Json)
                 setBody(
@@ -185,7 +187,8 @@ class NetworkManagementService : Service() {
             if (response.status == HttpStatusCode.OK) {
                 Log.d(TAG, "DNS record updated successfully")
             } else {
-                Log.e(TAG, "Failed to update DNS record: ${response.status}")
+                val errorBody = try { response.body<String>() } catch (e: Exception) { "<no body>" }
+                Log.e(TAG, "Failed to update DNS record: ${response.status} body=${errorBody}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating DNS record", e)
@@ -227,7 +230,8 @@ class NetworkManagementService : Service() {
             }
             
             if (response.status != HttpStatusCode.OK) {
-                Log.e(TAG, "Failed to send Telegram message: ${response.status}")
+                val errorBody = try { response.body<String>() } catch (e: Exception) { "<no body>" }
+                Log.e(TAG, "Failed to send Telegram message: ${response.status} body=${errorBody}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending Telegram message", e)
