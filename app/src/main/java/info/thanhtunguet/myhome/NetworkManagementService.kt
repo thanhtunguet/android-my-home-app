@@ -52,7 +52,7 @@ class NetworkManagementService : Service() {
     
     companion object {
         private const val TAG = "NetworkMgmtService" // Shortened tag name
-        private const val CHECK_INTERVAL: Long = 60 * 1000 // 1 minute
+        private const val CHECK_INTERVAL: Long = 5 * 60 * 1000 // 5 minutes
     }
     
     override fun onCreate() {
@@ -119,19 +119,25 @@ class NetworkManagementService : Service() {
     
     private suspend fun checkAndUpdateDns() {
         try {
+            ServiceStatus.lastCheckAt = System.currentTimeMillis()
+            ServiceStatus.nextCheckAt = ServiceStatus.lastCheckAt + CHECK_INTERVAL
             val currentIp = getPublicIpv4Address()
             if (currentIp == null) {
                 Log.w(TAG, "Public IPv4 not available; skipping DNS check")
+                ServiceStatus.currentPublicIp = null
                 return
             } else {
                 Log.d(TAG, "Current public IPv4: $currentIp")
+                ServiceStatus.currentPublicIp = currentIp
             }
 
             val dnsIp = getCurrentDnsIp()
             if (dnsIp == null) {
                 Log.w(TAG, "DNS A record for ${appConfig.cloudflareRecordName} not found or not IPv4")
+                ServiceStatus.currentDnsIp = null
             } else {
                 Log.d(TAG, "Current DNS A for ${appConfig.cloudflareRecordName}: $dnsIp")
+                ServiceStatus.currentDnsIp = dnsIp
             }
 
             if (dnsIp != null && currentIp != dnsIp) {

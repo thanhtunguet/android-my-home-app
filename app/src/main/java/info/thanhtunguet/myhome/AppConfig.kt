@@ -31,3 +31,11 @@ data class AppConfig(
         }
     }
 }
+
+object ServiceStatus {
+    @Volatile var currentPublicIp: String? = null
+    @Volatile var currentDnsIp: String? = null
+    @Volatile var lastCheckAt: Long = 0L
+    @Volatile var nextCheckAt: Long = 0L
+    @Volatile var currentPcOnline: Boolean? = null
+}

@@ -126,6 +126,7 @@ class HttpServer(private val appConfig: AppConfig) {
     private fun handleIsOnline(writer: PrintWriter) {
         try {
             val isOnline = isPcOnline()
+            ServiceStatus.currentPcOnline = isOnline
             sendResponse(writer, 200, "OK", if (isOnline) "true" else "false")
         } catch (e: Exception) {
             Log.e(TAG, "Error checking PC status", e)

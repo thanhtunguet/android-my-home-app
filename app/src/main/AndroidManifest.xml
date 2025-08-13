@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -10,7 +9,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
     <!-- TV app requirement -->
     <uses-feature
         android:name="android.software.leanback"
@@ -18,7 +16,6 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
-
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -29,26 +26,21 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyHome"
         android:banner="@drawable/ic_launcher_foreground">
-        
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:screenOrientation="landscape">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
-        
         <!-- Network Management Service -->
         <service
             android:name=".NetworkManagementService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-            
         <!-- Boot Receiver -->
         <receiver
             android:name=".BootReceiver"
@@ -59,7 +51,5 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
-        
     </application>
-
 </manifest>
