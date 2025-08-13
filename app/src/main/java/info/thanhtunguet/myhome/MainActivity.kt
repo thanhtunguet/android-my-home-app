@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
         val btnTurnOn = findViewById<Button>(R.id.btnTurnOn)
         val btnTurnOff = findViewById<Button>(R.id.btnTurnOff)
         val btnCheckOnline = findViewById<Button>(R.id.btnCheckOnline)
+        val btnOpenSettings = findViewById<Button>(R.id.btnOpenSettings)
 
         fun refreshUi() {
             tvPublicIp.text = ServiceStatus.currentPublicIp ?: "—"
@@ -53,6 +54,10 @@ class MainActivity : AppCompatActivity() {
         btnTurnOn.setOnClickListener { uiScope.launch { callLocal("/turn-on") } }
         btnTurnOff.setOnClickListener { uiScope.launch { callLocal("/turn-off") } }
         btnCheckOnline.setOnClickListener { uiScope.launch { callLocal("/is-online") } }
+
+        btnOpenSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
 
         uiScope.launch {
             while (true) {
