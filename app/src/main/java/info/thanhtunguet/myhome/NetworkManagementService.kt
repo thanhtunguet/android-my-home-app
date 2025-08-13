@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.Socket
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -118,56 +119,84 @@ class NetworkManagementService : Service() {
     
     private suspend fun checkAndUpdateDns() {
         try {
-            val currentIp = getPublicIpAddress()
-            if (currentIp != null) {
-                val dnsIp = getCurrentDnsIp()
-                if (currentIp != dnsIp) {
-                    updateDnsRecord(currentIp)
-                    sendTelegramMessage("Public IP changed from $dnsIp to $currentIp")
-                }
+            val currentIp = getPublicIpv4Address()
+            if (currentIp == null) {
+                Log.w(TAG, "Public IPv4 not available; skipping DNS check")
+                return
+            } else {
+                Log.d(TAG, "Current public IPv4: $currentIp")
+            }
+
+            val dnsIp = getCurrentDnsIp()
+            if (dnsIp == null) {
+                Log.w(TAG, "DNS A record for ${appConfig.cloudflareRecordName} not found or not IPv4")
+            } else {
+                Log.d(TAG, "Current DNS A for ${appConfig.cloudflareRecordName}: $dnsIp")
+            }
+
+            if (dnsIp != null && currentIp != dnsIp) {
+                Log.d(TAG, "IP mismatch; updating Cloudflare: ${dnsIp} -> $currentIp")
+                updateDnsRecord(currentIp)
+                sendTelegramMessage("Public IP changed from ${dnsIp} to $currentIp")
+            } else if (dnsIp == null) {
+                Log.w(TAG, "Skipping update because current DNS A could not be determined")
+            } else {
+                Log.d(TAG, "No change; public IP matches DNS: $currentIp")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error checking and updating DNS", e)
         }
     }
     
-    private fun getPublicIpAddress(): String? {
-        return try {
-            val url = URL("https://icanhazip.com")
-            val connection = url.openConnection() as HttpsURLConnection
-            connection.inputStream.bufferedReader().readLine()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting public IP", e)
-            null
+    private fun getPublicIpv4Address(): String? {
+        val endpoints = listOf(
+            "https://api4.ipify.org",
+            "https://ipv4.icanhazip.com"
+        )
+        for (endpoint in endpoints) {
+            try {
+                val url = URL(endpoint)
+                val connection = url.openConnection() as HttpsURLConnection
+                val ip = connection.inputStream.bufferedReader().readLine()?.trim()
+                if (ip != null && isValidIpv4(ip)) {
+                    Log.d(TAG, "Public IPv4 source $endpoint -> $ip")
+                    return ip
+                } else {
+                    Log.w(TAG, "Non-IPv4/empty from $endpoint: '$ip'")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "IPv4 endpoint failed: $endpoint", e)
+            }
         }
+        Log.e(TAG, "All IPv4 endpoints failed")
+        return null
+    }
+
+    private fun isValidIpv4(ip: String): Boolean {
+        val regex = Regex("^(25[0-5]|2[0-4]\\d|[0-1]?\\d{1,2})(\\.(25[0-5]|2[0-4]\\d|[0-1]?\\d{1,2})){3}$")
+        return regex.matches(ip)
     }
     
+    @Serializable
+    private data class DnsAnswer(val name: String, val type: Int, val TTL: Int? = null, val data: String)
+    @Serializable
+    private data class DnsResolveResponse(val Status: Int? = null, val Answer: List<DnsAnswer>? = null)
+
     private suspend fun getCurrentDnsIp(): String? {
         return try {
-            val response: String = httpClient.get("https://cloudflare-dns.com/dns-query") {
+            val responseText: String = httpClient.get("https://dns.google/resolve") {
                 url {
                     parameters.append("name", appConfig.cloudflareRecordName)
                     parameters.append("type", "A")
                 }
                 headers {
-                    append("accept", "application/dns-json")
+                    append("accept", "application/json")
                 }
             }.body()
-            
-            // Parse the JSON response to extract the IP
-            // This is a simplified parsing, in reality you'd want to use a proper JSON library
-            val answerStart = response.indexOf("\"Answer\":")
-            if (answerStart != -1) {
-                val dataStart = response.indexOf("\"data\":\"", answerStart)
-                if (dataStart != -1) {
-                    val ipStart = dataStart + 8 // Length of "\"data\":\""
-                    val ipEnd = response.indexOf("\"", ipStart)
-                    if (ipEnd != -1) {
-                        return response.substring(ipStart, ipEnd)
-                    }
-                }
-            }
-            null
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString(DnsResolveResponse.serializer(), responseText)
+            val answer = parsed.Answer?.firstOrNull { it.type == 1 }
+            val ip = answer?.data?.trim()
+            if (ip != null && isValidIpv4(ip)) ip else null
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current DNS IP", e)
             null
@@ -176,6 +205,7 @@ class NetworkManagementService : Service() {
     
     private suspend fun updateDnsRecord(newIp: String) {
         try {
+            Log.d(TAG, "Updating Cloudflare DNS A '${appConfig.cloudflareRecordName}' (zone=${appConfig.cloudflareZoneId}, record=${appConfig.cloudflareRecordId}) to $newIp")
             val body = CloudflareDnsUpdateRequest(
                 name = appConfig.cloudflareRecordName,
                 content = newIp
