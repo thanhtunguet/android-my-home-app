@@ -1,35 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:padding="16dp"
+    tools:context=".SettingsActivity">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:text="Settings"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="16dp"/>
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Cloudflare" android:textStyle="bold"/>
-        <EditText android:id="@+id/etCfToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="API Token" />
-        <EditText android:id="@+id/etCfEmail" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="API Email (Global Key)" />
-        <EditText android:id="@+id/etCfKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="API Key (Global)" />
-        <EditText android:id="@+id/etCfZone" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Zone ID" />
-        <EditText android:id="@+id/etCfRecordId" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Record ID" />
-        <EditText android:id="@+id/etCfRecordName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Record Name (FQDN)" />
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/tvTitle"
+        android:layout_above="@+id/btnSave">
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Telegram" android:textStyle="bold"/>
-        <EditText android:id="@+id/etTgToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Bot Token" />
-        <EditText android:id="@+id/etTgChat" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Chat ID" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PC" android:textStyle="bold"/>
-        <EditText android:id="@+id/etPcIp" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="PC IP Address" />
-        <EditText android:id="@+id/etPcMac" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="PC MAC Address" />
-        <EditText android:id="@+id/etPcPort" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Probe Port (22 or 3389)" android:inputType="number" />
-        <EditText android:id="@+id/etPcShutdown" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Shutdown Command" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cloudflare"
+                android:textColor="#03DAC5"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"/>
 
-        <Button android:id="@+id/btnSave" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Save" />
-    </LinearLayout>
+            <EditText
+                android:id="@+id/etCfToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="API Token"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
 
-</ScrollView>
+            <EditText
+                android:id="@+id/etCfEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="API Email (Global Key)"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
 
+            <EditText
+                android:id="@+id/etCfKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="API Key (Global)"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
 
+            <EditText
+                android:id="@+id/etCfZone"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Zone ID"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etCfRecordId"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Record ID"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etCfRecordName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Record Name (FQDN)"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Telegram"
+                android:textColor="#03DAC5" 
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"/>
+
+            <EditText
+                android:id="@+id/etTgToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Bot Token"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etTgChat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Chat ID"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PC"
+                android:textColor="#03DAC5"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"/>
+
+            <EditText
+                android:id="@+id/etPcIp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="PC IP Address"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etPcMac"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="PC MAC Address"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etPcPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Probe Port (22 or 3389)"
+                android:inputType="number"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+            <EditText
+                android:id="@+id/etPcShutdown"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Shutdown Command"
+                android:textColor="#E0E0E0"
+                android:textColorHint="#B0B0B0" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnSave"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Save"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"/>
+
+</RelativeLayout>

@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         val btnTurnOff = findViewById<Button>(R.id.btnTurnOff)
         val btnCheckOnline = findViewById<Button>(R.id.btnCheckOnline)
         // Removed text Settings button in favor of top-right icon
-        val btnClose = findViewById<Button>(R.id.btnClose)
+        
         val btnSettingsIcon = findViewById<View>(R.id.btnSettingsIcon)
         val btnOpenPlayStore = findViewById<Button>(R.id.btnOpenPlayStore)
         val btnOpenApps = findViewById<Button>(R.id.btnOpenApps)
@@ -88,9 +88,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnClose.setOnClickListener {
-            finish()
-        }
+        
 
         btnOpenPlayStore.setOnClickListener {
             // Try launch Play Store app
