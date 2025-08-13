@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
         val btnTurnOff = findViewById<Button>(R.id.btnTurnOff)
         val btnCheckOnline = findViewById<Button>(R.id.btnCheckOnline)
         val btnOpenSettings = findViewById<Button>(R.id.btnOpenSettings)
+        val btnClose = findViewById<Button>(R.id.btnClose)
         val btnSettingsIcon = findViewById<View>(R.id.btnSettingsIcon)
 
         fun refreshUi() {
@@ -67,6 +68,10 @@ class MainActivity : AppCompatActivity() {
                 refreshUi()
                 delay(1000)
             }
+        }
+
+        btnClose.setOnClickListener {
+            finish()
         }
     }
 
