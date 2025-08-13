@@ -53,9 +53,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnTurnOn.setOnClickListener { uiScope.launch { callLocal("/turn-on") } }
-        btnTurnOff.setOnClickListener { uiScope.launch { callLocal("/turn-off") } }
-        btnCheckOnline.setOnClickListener { uiScope.launch { callLocal("/is-online") } }
+        btnTurnOn.setOnClickListener {
+            try { ControlActions.sendWakeOnLan(AppConfig.load(this).pcMacAddress) } catch (_: Exception) {}
+        }
+        btnTurnOff.setOnClickListener {
+            val cfg = AppConfig.load(this)
+            ControlActions.sendShutdownCommand(cfg.pcIpAddress, cfg.pcShutdownCommand, 10675)
+        }
+        btnCheckOnline.setOnClickListener {
+            val cfg = AppConfig.load(this)
+            ServiceStatus.currentPcOnline = ControlActions.isPcOnline(cfg.pcIpAddress, cfg.pcProbePort)
+        }
 
         val openSettings: (View) -> Unit = {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -88,14 +96,7 @@ class MainActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
-    private suspend fun callLocal(path: String) {
-        try {
-            val url = URL("http://127.0.0.1:8080$path")
-            val conn = (url.openConnection() as HttpURLConnection).apply { connectTimeout = 2000; readTimeout = 3000 }
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } catch (_: Exception) {
-        }
-    }
+    // Removed local HTTP calls; actions are now invoked directly
 
     override fun onDestroy() {
         super.onDestroy()

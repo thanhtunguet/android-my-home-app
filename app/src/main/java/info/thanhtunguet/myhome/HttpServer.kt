@@ -148,83 +148,17 @@ class HttpServer(private val appConfig: AppConfig) {
     }
     
     private fun sendWakeOnLan() {
-        try {
-            val macBytes = appConfig.pcMacAddress.replace(":", "").chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            val packet = ByteArray(6 + (16 * macBytes.size))
-            
-            // First 6 bytes are 0xFF
-            for (i in 0..5) {
-                packet[i] = 0xFF.toByte()
-            }
-            
-            // Repeat MAC address 16 times
-            var index = 6
-            for (i in 0..15) {
-                for (j in macBytes.indices) {
-                    packet[index] = macBytes[j]
-                    index++
-                }
-            }
-            
-            val socket = DatagramSocket()
-            val broadcastAddress = InetAddress.getByName("255.255.255.255")
-            val datagramPacket = DatagramPacket(packet, packet.size, broadcastAddress, 9)
-            socket.send(datagramPacket)
-            socket.close()
-            
-            Log.d(TAG, "Wake-on-LAN packet sent to ${appConfig.pcMacAddress}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending Wake-on-LAN packet", e)
-            throw e
-        }
+        ControlActions.sendWakeOnLan(appConfig.pcMacAddress)
     }
     
     private fun sendShutdownCommand() {
         // Send shutdown command via TCP
         serverScope.launch {
-            try {
-				val socket = Socket(appConfig.pcIpAddress, 10675)
-                val outputStream = socket.getOutputStream()
-                outputStream.write(appConfig.pcShutdownCommand.toByteArray())
-                outputStream.flush()
-                socket.close()
-                Log.d(TAG, "Shutdown command sent via TCP")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error sending shutdown command via TCP", e)
-            }
-        }
-        
-        // Send shutdown command via UDP
-        serverScope.launch {
-            try {
-                val socket = DatagramSocket()
-                val data = appConfig.pcShutdownCommand.toByteArray()
-				val packet = DatagramPacket(data, data.size, InetAddress.getByName(appConfig.pcIpAddress), 10675)
-                socket.send(packet)
-                socket.close()
-                Log.d(TAG, "Shutdown command sent via UDP")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error sending shutdown command via UDP", e)
-            }
+            ControlActions.sendShutdownCommand(appConfig.pcIpAddress, appConfig.pcShutdownCommand, 10675)
         }
     }
     
-	private fun isPcOnline(): Boolean {
-		return try {
-			var socket: Socket? = null
-			try {
-				socket = Socket(appConfig.pcIpAddress, appConfig.pcProbePort)
-				true
-			} catch (e: Exception) {
-				false
-			} finally {
-				try { socket?.close() } catch (_: Exception) {}
-			}
-		} catch (e: Exception) {
-			Log.e(TAG, "Error checking PC status", e)
-			false
-		}
-	}
+    private fun isPcOnline(): Boolean = ControlActions.isPcOnline(appConfig.pcIpAddress, appConfig.pcProbePort)
     
     private fun sendTelegramMessage(message: String) {
         serverScope.launch {
