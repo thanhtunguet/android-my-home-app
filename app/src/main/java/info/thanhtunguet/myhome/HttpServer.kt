@@ -213,12 +213,12 @@ class HttpServer(private val appConfig: AppConfig) {
 		return try {
 			var socket: Socket? = null
 			try {
-				socket = Socket(appConfig.pcIpAddress, 3389)
+				socket = Socket(appConfig.pcIpAddress, appConfig.pcProbePort)
 				true
 			} catch (e: Exception) {
 				false
 			} finally {
-				socket?.close()
+				try { socket?.close() } catch (_: Exception) {}
 			}
 		} catch (e: Exception) {
 			Log.e(TAG, "Error checking PC status", e)

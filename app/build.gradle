@@ -54,6 +54,7 @@ android {
         buildConfigField "String", "PC_IP_ADDRESS", "\"${envOrProp('PC_IP_ADDRESS')}\""
         buildConfigField "String", "PC_MAC_ADDRESS", "\"${envOrProp('PC_MAC_ADDRESS')}\""
         buildConfigField "String", "PC_SHUTDOWN_COMMAND", "\"${envOrProp('PC_SHUTDOWN_COMMAND')}\""
+        // Probe port remains configurable via settings; default is 3389 in code
     }
 
     buildTypes {

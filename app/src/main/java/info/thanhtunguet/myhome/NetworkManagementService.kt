@@ -57,7 +57,7 @@ class NetworkManagementService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        appConfig = AppConfig.fromBuildConfig()
+        appConfig = AppConfig.load(this)
         // Log which Cloudflare auth method will be used (masked values)
         val tokenPreview = if (appConfig.cloudflareApiToken.isNotEmpty()) appConfig.cloudflareApiToken.take(6) + "***" else "<empty>"
         val keyPreview = if (appConfig.cloudflareApiKey.isNotEmpty()) appConfig.cloudflareApiKey.take(6) + "***" else "<empty>"
@@ -119,6 +119,8 @@ class NetworkManagementService : Service() {
     
     private suspend fun checkAndUpdateDns() {
         try {
+            // Reload latest user settings before each cycle
+            appConfig = AppConfig.load(this)
             ServiceStatus.lastCheckAt = System.currentTimeMillis()
             ServiceStatus.nextCheckAt = ServiceStatus.lastCheckAt + CHECK_INTERVAL
             val currentIp = getPublicIpv4Address()
