@@ -23,9 +23,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import java.net.Socket
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
+
+@Serializable
+data class CloudflareDnsUpdateRequest(
+    val type: String = "A",
+    val name: String,
+    val content: String,
+    val ttl: Int = 120
+)
 
 class NetworkManagementService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -163,14 +172,14 @@ class NetworkManagementService : Service() {
             val response = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
                 headers {
                     append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
-                    append("Content-Type", "application/json")
                 }
-                setBody(mapOf(
-                    "type" to "A",
-                    "name" to appConfig.cloudflareRecordName,
-                    "content" to newIp,
-                    "ttl" to 120
-                ))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    CloudflareDnsUpdateRequest(
+                        name = appConfig.cloudflareRecordName,
+                        content = newIp
+                    )
+                )
             }
             
             if (response.status == HttpStatusCode.OK) {

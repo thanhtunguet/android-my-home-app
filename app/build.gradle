@@ -4,6 +4,31 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+import java.util.Properties
+
+// Load secrets from local.properties as a fallback to environment variables
+def localProps = new Properties()
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { stream -> localProps.load(stream) }
+}
+
+def envOrProp = { String key ->
+    def value = System.getenv(key)
+    if (value == null || value.toString().trim().isEmpty()) {
+        value = localProps.getProperty(key, "")
+    }
+    // Strip surrounding quotes if present (e.g. value written as "example")
+    if (value != null && value.size() >= 2) {
+        def startsWithQuote = value.startsWith('"') || value.startsWith("'")
+        def endsWithQuote = value.endsWith('"') || value.endsWith("'")
+        if (startsWithQuote && endsWithQuote) {
+            value = value.substring(1, value.length() - 1)
+        }
+    }
+    return value ?: ""
+}
+
 android {
     namespace 'info.thanhtunguet.myhome'
     compileSdk 36
@@ -17,16 +42,16 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
-        // Build config fields for environment variables
-        buildConfigField "String", "CLOUDFLARE_API_TOKEN", "\"${System.getenv("CLOUDFLARE_API_TOKEN") ?: ""}\""
-        buildConfigField "String", "CLOUDFLARE_ZONE_ID", "\"${System.getenv("CLOUDFLARE_ZONE_ID") ?: ""}\""
-        buildConfigField "String", "CLOUDFLARE_RECORD_ID", "\"${System.getenv("CLOUDFLARE_RECORD_ID") ?: ""}\""
-        buildConfigField "String", "CLOUDFLARE_RECORD_NAME", "\"${System.getenv("CLOUDFLARE_RECORD_NAME") ?: ""}\""
-        buildConfigField "String", "TELEGRAM_BOT_TOKEN", "\"${System.getenv("TELEGRAM_BOT_TOKEN") ?: ""}\""
-        buildConfigField "String", "TELEGRAM_CHAT_ID", "\"${System.getenv("TELEGRAM_CHAT_ID") ?: ""}\""
-        buildConfigField "String", "PC_IP_ADDRESS", "\"${System.getenv("PC_IP_ADDRESS") ?: ""}\""
-        buildConfigField "String", "PC_MAC_ADDRESS", "\"${System.getenv("PC_MAC_ADDRESS") ?: ""}\""
-        buildConfigField "String", "PC_SHUTDOWN_COMMAND", "\"${System.getenv("PC_SHUTDOWN_COMMAND") ?: ""}\""
+        // BuildConfig fields populated from env vars, falling back to local.properties
+        buildConfigField "String", "CLOUDFLARE_API_TOKEN", "\"${envOrProp('CLOUDFLARE_API_TOKEN')}\""
+        buildConfigField "String", "CLOUDFLARE_ZONE_ID", "\"${envOrProp('CLOUDFLARE_ZONE_ID')}\""
+        buildConfigField "String", "CLOUDFLARE_RECORD_ID", "\"${envOrProp('CLOUDFLARE_RECORD_ID')}\""
+        buildConfigField "String", "CLOUDFLARE_RECORD_NAME", "\"${envOrProp('CLOUDFLARE_RECORD_NAME')}\""
+        buildConfigField "String", "TELEGRAM_BOT_TOKEN", "\"${envOrProp('TELEGRAM_BOT_TOKEN')}\""
+        buildConfigField "String", "TELEGRAM_CHAT_ID", "\"${envOrProp('TELEGRAM_CHAT_ID')}\""
+        buildConfigField "String", "PC_IP_ADDRESS", "\"${envOrProp('PC_IP_ADDRESS')}\""
+        buildConfigField "String", "PC_MAC_ADDRESS", "\"${envOrProp('PC_MAC_ADDRESS')}\""
+        buildConfigField "String", "PC_SHUTDOWN_COMMAND", "\"${envOrProp('PC_SHUTDOWN_COMMAND')}\""
     }
 
     buildTypes {
