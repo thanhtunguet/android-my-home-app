@@ -11,6 +11,7 @@ object ControlActions {
 
     fun sendWakeOnLan(macAddress: String) {
         try {
+            Log.d(TAG, "sendWakeOnLan: mac=$macAddress")
             val macBytes = macAddress.replace(":", "").chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             val packet = ByteArray(6 + (16 * macBytes.size))
             for (i in 0..5) packet[i] = 0xFF.toByte()
@@ -20,7 +21,7 @@ object ControlActions {
                     packet[index++] = b
                 }
             }
-            val socket = DatagramSocket()
+            val socket = DatagramSocket().apply { broadcast = true }
             val broadcastAddress = InetAddress.getByName("255.255.255.255")
             val datagramPacket = DatagramPacket(packet, packet.size, broadcastAddress, 9)
             socket.send(datagramPacket)
@@ -33,6 +34,7 @@ object ControlActions {
     }
 
     fun sendShutdownCommand(ipAddress: String, shutdownCommand: String, port: Int = 10675) {
+        Log.d(TAG, "sendShutdownCommand: ip=$ipAddress port=$port")
         // TCP
         try {
             val socket = Socket(ipAddress, port)
@@ -46,7 +48,7 @@ object ControlActions {
         }
         // UDP
         try {
-            val socket = DatagramSocket()
+            val socket = DatagramSocket().apply { broadcast = true }
             val data = shutdownCommand.toByteArray()
             val packet = DatagramPacket(data, data.size, InetAddress.getByName(ipAddress), port)
             socket.send(packet)
@@ -58,6 +60,7 @@ object ControlActions {
     }
 
     fun isPcOnline(ipAddress: String, probePort: Int): Boolean {
+        Log.d(TAG, "isPcOnline: ip=$ipAddress port=$probePort")
         return try {
             var socket: Socket? = null
             try {

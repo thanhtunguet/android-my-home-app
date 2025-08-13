@@ -92,12 +92,6 @@
                 android:text="Check Online" />
         </LinearLayout>
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnOpenSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Open Settings"
-            android:layout_marginTop="16dp" />
-        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnClose"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

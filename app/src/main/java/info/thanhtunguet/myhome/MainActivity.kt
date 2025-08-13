@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
         val btnTurnOn = findViewById<Button>(R.id.btnTurnOn)
         val btnTurnOff = findViewById<Button>(R.id.btnTurnOff)
         val btnCheckOnline = findViewById<Button>(R.id.btnCheckOnline)
-        val btnOpenSettings = findViewById<Button>(R.id.btnOpenSettings)
+        // Removed text Settings button in favor of top-right icon
         val btnClose = findViewById<Button>(R.id.btnClose)
         val btnSettingsIcon = findViewById<View>(R.id.btnSettingsIcon)
 
@@ -54,21 +54,28 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnTurnOn.setOnClickListener {
-            try { ControlActions.sendWakeOnLan(AppConfig.load(this).pcMacAddress) } catch (_: Exception) {}
+            uiScope.launch(Dispatchers.IO) {
+                val cfg = AppConfig.load(this@MainActivity)
+                ControlActions.sendWakeOnLan(cfg.pcMacAddress)
+            }
         }
         btnTurnOff.setOnClickListener {
-            val cfg = AppConfig.load(this)
-            ControlActions.sendShutdownCommand(cfg.pcIpAddress, cfg.pcShutdownCommand, 10675)
+            uiScope.launch(Dispatchers.IO) {
+                val cfg = AppConfig.load(this@MainActivity)
+                ControlActions.sendShutdownCommand(cfg.pcIpAddress, cfg.pcShutdownCommand, 10675)
+            }
         }
         btnCheckOnline.setOnClickListener {
-            val cfg = AppConfig.load(this)
-            ServiceStatus.currentPcOnline = ControlActions.isPcOnline(cfg.pcIpAddress, cfg.pcProbePort)
+            uiScope.launch(Dispatchers.IO) {
+                val cfg = AppConfig.load(this@MainActivity)
+                val online = ControlActions.isPcOnline(cfg.pcIpAddress, cfg.pcProbePort)
+                ServiceStatus.currentPcOnline = online
+            }
         }
 
         val openSettings: (View) -> Unit = {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        btnOpenSettings.setOnClickListener(openSettings)
         btnSettingsIcon.setOnClickListener(openSettings)
 
         uiScope.launch {
