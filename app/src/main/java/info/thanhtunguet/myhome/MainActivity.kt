@@ -10,30 +10,52 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import android.view.Menu
 import android.view.MenuItem
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import java.net.HttpURLConnection
 import java.net.URL
 
 class MainActivity : AppCompatActivity() {
     private val uiScope = CoroutineScope(Dispatchers.Main + Job())
+    private val uiRefreshIntervalMs: Long = 90_000
+    private lateinit var tvPublicIp: TextView
+    private lateinit var tvDnsIp: TextView
+    private lateinit var tvNextCheck: TextView
+    private lateinit var tvPcStatus: TextView
+    private lateinit var tvMemory: TextView
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NetworkManagementService.ACTION_STATUS_UPDATE) {
+                refreshUi()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Start the background service
-        val serviceIntent = Intent(this, NetworkManagementService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
+        // Start the background service after initial layout to avoid startup jank
+        window.decorView.post {
+            val serviceIntent = Intent(this, NetworkManagementService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
+        }
 
-        val tvPublicIp = findViewById<TextView>(R.id.tvPublicIp)
-        val tvDnsIp = findViewById<TextView>(R.id.tvDnsIp)
-        val tvNextCheck = findViewById<TextView>(R.id.tvNextCheck)
-        val tvPcStatus = findViewById<TextView>(R.id.tvPcStatus)
+        tvPublicIp = findViewById(R.id.tvPublicIp)
+        tvDnsIp = findViewById(R.id.tvDnsIp)
+        tvNextCheck = findViewById(R.id.tvNextCheck)
+        tvPcStatus = findViewById(R.id.tvPcStatus)
+        tvMemory = findViewById(R.id.tvMemory)
         val btnTurnOn = findViewById<Button>(R.id.btnTurnOn)
         val btnTurnOff = findViewById<Button>(R.id.btnTurnOff)
         val btnCheckOnline = findViewById<Button>(R.id.btnCheckOnline)
@@ -44,32 +66,22 @@ class MainActivity : AppCompatActivity() {
         val btnOpenApps = findViewById<Button>(R.id.btnOpenApps)
         val btnOpenSystemSettings = findViewById<Button>(R.id.btnOpenSystemSettings)
 
-        fun refreshUi() {
-            tvPublicIp.text = ServiceStatus.currentPublicIp ?: "—"
-            tvDnsIp.text = ServiceStatus.currentDnsIp ?: "—"
-            val nextAt = ServiceStatus.nextCheckAt
-            tvNextCheck.text = if (nextAt > 0) java.text.DateFormat.getTimeInstance().format(java.util.Date(nextAt)) else "—"
-            tvPcStatus.text = when (ServiceStatus.currentPcOnline) {
-                true -> "Online"
-                false -> "Offline"
-                else -> "Unknown"
-            }
-        }
+        refreshUi()
 
         btnTurnOn.setOnClickListener {
-            uiScope.launch(Dispatchers.IO) {
+            lifecycleScope.launch(Dispatchers.IO) {
                 val cfg = AppConfig.load(this@MainActivity)
                 ControlActions.sendWakeOnLan(cfg.pcMacAddress)
             }
         }
         btnTurnOff.setOnClickListener {
-            uiScope.launch(Dispatchers.IO) {
+            lifecycleScope.launch(Dispatchers.IO) {
                 val cfg = AppConfig.load(this@MainActivity)
                 ControlActions.sendShutdownCommand(cfg.pcIpAddress, cfg.pcShutdownCommand, 10675)
             }
         }
         btnCheckOnline.setOnClickListener {
-            uiScope.launch(Dispatchers.IO) {
+            lifecycleScope.launch(Dispatchers.IO) {
                 val cfg = AppConfig.load(this@MainActivity)
                 val online = ControlActions.isPcOnline(cfg.pcIpAddress, cfg.pcProbePort)
                 ServiceStatus.currentPcOnline = online
@@ -81,12 +93,17 @@ class MainActivity : AppCompatActivity() {
         }
         btnSettingsIcon.setOnClickListener(openSettings)
 
-        uiScope.launch {
-            while (true) {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 refreshUi()
-                delay(1000)
+                while (true) {
+                    delay(uiRefreshIntervalMs)
+                    refreshUi()
+                }
             }
         }
+
+        // Receiver will be registered in onStart to align with visibility
 
         
 
@@ -126,5 +143,54 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         uiScope.cancel()
+    }
+
+    private fun refreshUi() {
+        tvPublicIp.text = ServiceStatus.currentPublicIp ?: "—"
+        tvDnsIp.text = ServiceStatus.currentDnsIp ?: "—"
+        val nextAt = ServiceStatus.nextCheckAt
+        tvNextCheck.text = if (nextAt > 0) java.text.DateFormat.getTimeInstance().format(java.util.Date(nextAt)) else "—"
+        tvMemory.text = formatMemoryStatus()
+        tvPcStatus.text = when (ServiceStatus.currentPcOnline) {
+            true -> "Online"
+            false -> "Offline"
+            else -> {
+                // If unknown, try a one-shot background probe to get a quick answer for the UI
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val cfg = AppConfig.load(this@MainActivity)
+                    val online = ControlActions.isPcOnline(cfg.pcIpAddress, cfg.pcProbePort)
+                    ServiceStatus.currentPcOnline = online
+                    launch(Dispatchers.Main) { refreshUi() }
+                }
+                "Unknown"
+            }
+        }
+    }
+
+    private fun formatMemoryStatus(): String {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val mi = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        val avail = mi.availMem
+        val total = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN) mi.totalMem else 0L
+        return humanReadableBytes(avail) + " / " + (if (total > 0) humanReadableBytes(total) else "?")
+    }
+
+    private fun humanReadableBytes(bytes: Long): String {
+        val unit = 1024
+        if (bytes < unit) return "$bytes B"
+        val exp = (Math.log(bytes.toDouble()) / Math.log(unit.toDouble())).toInt()
+        val pre = "KMGTPE"[exp - 1]
+        return String.format(java.util.Locale.US, "%.1f %sB", bytes / Math.pow(unit.toDouble(), exp.toDouble()), pre)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        try { registerReceiver(statusReceiver, IntentFilter(NetworkManagementService.ACTION_STATUS_UPDATE)) } catch (_: Exception) {}
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
     }
 }

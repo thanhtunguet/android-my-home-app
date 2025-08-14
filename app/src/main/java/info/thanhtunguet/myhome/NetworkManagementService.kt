@@ -10,13 +10,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,16 +37,12 @@ class NetworkManagementService : Service() {
     private val channelId = "MyHomeServiceChannel"
     private lateinit var appConfig: AppConfig
     private lateinit var httpServer: HttpServer
-    private val httpClient = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json()
-        }
-    }
     private val jsonIgnoreUnknown = Json { ignoreUnknownKeys = true }
     
     companion object {
         private const val TAG = "NetworkMgmtService" // Shortened tag name
         private const val CHECK_INTERVAL: Long = 5 * 60 * 1000 // 5 minutes
+        const val ACTION_STATUS_UPDATE: String = "info.thanhtunguet.myhome.STATUS_UPDATE"
     }
     
     override fun onCreate() {
@@ -71,8 +60,8 @@ class NetworkManagementService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Start the HTTP server
-        httpServer.start()
+        // Start the HTTP server off the main thread (Service lifecycle callbacks run on main)
+        serviceScope.launch { httpServer.start() }
         
         // Start the periodic DNS check
         serviceScope.launch {
@@ -96,6 +85,7 @@ class NetworkManagementService : Service() {
         super.onDestroy()
         httpServer.stop()
         serviceScope.cancel()
+        // no-op
     }
     
     private fun createNotificationChannel() {
@@ -124,6 +114,13 @@ class NetworkManagementService : Service() {
             appConfig = AppConfig.load(this)
             ServiceStatus.lastCheckAt = System.currentTimeMillis()
             ServiceStatus.nextCheckAt = ServiceStatus.lastCheckAt + CHECK_INTERVAL
+            // Always check PC online state regardless of public IP/DNS results
+            try {
+                ServiceStatus.currentPcOnline = ControlActions.isPcOnline(appConfig.pcIpAddress, appConfig.pcProbePort)
+            } catch (e: Exception) {
+                Log.e(TAG, "PC online check failed", e)
+                ServiceStatus.currentPcOnline = null
+            }
             val currentIp = getPublicIpv4Address()
             if (currentIp == null) {
                 Log.w(TAG, "Public IPv4 not available; skipping DNS check")
@@ -154,6 +151,23 @@ class NetworkManagementService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error checking and updating DNS", e)
+        } finally {
+            // Always notify UI about latest status
+            broadcastStatus()
+        }
+    }
+
+    private fun broadcastStatus() {
+        try {
+            val intent = Intent(ACTION_STATUS_UPDATE).apply {
+                putExtra("publicIp", ServiceStatus.currentPublicIp)
+                putExtra("dnsIp", ServiceStatus.currentDnsIp)
+                putExtra("lastCheckAt", ServiceStatus.lastCheckAt)
+                putExtra("nextCheckAt", ServiceStatus.nextCheckAt)
+                putExtra("pcOnline", ServiceStatus.currentPcOnline)
+            }
+            sendBroadcast(intent)
+        } catch (_: Exception) {
         }
     }
     
@@ -163,18 +177,25 @@ class NetworkManagementService : Service() {
             "https://ipv4.icanhazip.com"
         )
         for (endpoint in endpoints) {
+            var connection: HttpsURLConnection? = null
             try {
                 val url = URL(endpoint)
-                val connection = url.openConnection() as HttpsURLConnection
-                val ip = connection.inputStream.bufferedReader().readLine()?.trim()
-                if (ip != null && isValidIpv4(ip)) {
-                    Log.d(TAG, "Public IPv4 source $endpoint -> $ip")
-                    return ip
-                } else {
-                    Log.w(TAG, "Non-IPv4/empty from $endpoint: '$ip'")
+                connection = url.openConnection() as HttpsURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.inputStream.bufferedReader().use { reader ->
+                    val ip = reader.readLine()?.trim()
+                    if (ip != null && isValidIpv4(ip)) {
+                        Log.d(TAG, "Public IPv4 source $endpoint -> $ip")
+                        return ip
+                    } else {
+                        Log.w(TAG, "Non-IPv4/empty from $endpoint: '$ip'")
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "IPv4 endpoint failed: $endpoint", e)
+            } finally {
+                try { connection?.disconnect() } catch (_: Exception) {}
             }
         }
         Log.e(TAG, "All IPv4 endpoints failed")
@@ -193,19 +214,22 @@ class NetworkManagementService : Service() {
 
     private suspend fun getCurrentDnsIp(): String? {
         return try {
-            val responseText: String = httpClient.get("https://dns.google/resolve") {
-                url {
-                    parameters.append("name", appConfig.cloudflareRecordName)
-                    parameters.append("type", "A")
+            val url = URL("https://dns.google/resolve?name=${appConfig.cloudflareRecordName}&type=A")
+            var conn: HttpsURLConnection? = null
+            try {
+                conn = (url.openConnection() as HttpsURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    setRequestProperty("Accept", "application/json")
                 }
-                headers {
-                    append("accept", "application/json")
-                }
-            }.body()
-            val parsed = jsonIgnoreUnknown.decodeFromString(DnsResolveResponse.serializer(), responseText)
-            val answer = parsed.Answer?.firstOrNull { it.type == 1 }
-            val ip = answer?.data?.trim()
-            if (ip != null && isValidIpv4(ip)) ip else null
+                val response = conn.inputStream.bufferedReader().use { it.readText() }
+                val parsed = jsonIgnoreUnknown.decodeFromString(DnsResolveResponse.serializer(), response)
+                val answer = parsed.Answer?.firstOrNull { it.type == 1 }
+                val ip = answer?.data?.trim()
+                if (ip != null && isValidIpv4(ip)) ip else null
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current DNS IP", e)
             null
@@ -215,104 +239,76 @@ class NetworkManagementService : Service() {
     private suspend fun updateDnsRecord(newIp: String) {
         try {
             Log.d(TAG, "Updating Cloudflare DNS A '${appConfig.cloudflareRecordName}' (zone=${appConfig.cloudflareZoneId}, record=${appConfig.cloudflareRecordId}) to $newIp")
-            val body = CloudflareDnsUpdateRequest(
-                name = appConfig.cloudflareRecordName,
-                content = newIp
+            val body = jsonIgnoreUnknown.encodeToString(CloudflareDnsUpdateRequest.serializer(),
+                CloudflareDnsUpdateRequest(name = appConfig.cloudflareRecordName, content = newIp)
             )
-
-            // Attempt with API Token first if present, else with Global Key
-            val triedToken = appConfig.cloudflareApiToken.isNotEmpty()
-            val responsePrimary = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
-                headers {
-                    append("Accept", "application/json")
-                    if (triedToken) {
-                        append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
+            val url = URL("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}")
+            var conn: HttpsURLConnection? = null
+            try {
+                conn = (url.openConnection() as HttpsURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    doOutput = true
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Content-Type", "application/json")
+                    // Auth header
+                    if (appConfig.cloudflareApiToken.isNotEmpty()) {
+                        setRequestProperty("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
                     } else {
-                        if (appConfig.cloudflareApiEmail.isNotEmpty()) append("X-Auth-Email", appConfig.cloudflareApiEmail)
-                        if (appConfig.cloudflareApiKey.isNotEmpty()) append("X-Auth-Key", appConfig.cloudflareApiKey)
+                        if (appConfig.cloudflareApiEmail.isNotEmpty()) setRequestProperty("X-Auth-Email", appConfig.cloudflareApiEmail)
+                        if (appConfig.cloudflareApiKey.isNotEmpty()) setRequestProperty("X-Auth-Key", appConfig.cloudflareApiKey)
+                    }
+                    try {
+                        requestMethod = "PATCH"
+                    } catch (e: java.net.ProtocolException) {
+                        requestMethod = "POST"
+                        setRequestProperty("X-HTTP-Method-Override", "PATCH")
                     }
                 }
-                contentType(ContentType.Application.Json)
-                setBody(body)
-            }
-
-            if (responsePrimary.status == HttpStatusCode.OK) {
-                Log.d(TAG, "DNS record updated successfully")
-                return
-            }
-
-            val primaryError = try { responsePrimary.body<String>() } catch (e: Exception) { "<no body>" }
-            Log.e(TAG, "Cloudflare update failed (primary ${responsePrimary.status}). body=${primaryError}")
-
-            val authError = primaryError.contains("\"code\":10001") || primaryError.contains("Unable to authenticate request", ignoreCase = true)
-            val canTryFallback = (triedToken && (appConfig.cloudflareApiEmail.isNotEmpty() || appConfig.cloudflareApiKey.isNotEmpty())) || (!triedToken && appConfig.cloudflareApiToken.isNotEmpty())
-            if (authError && canTryFallback) {
-                // Retry with the alternative auth method
-                val usingTokenNow = !triedToken
-                Log.d(TAG, "Retrying Cloudflare update with ${if (usingTokenNow) "API_TOKEN" else "GLOBAL_KEY"} auth")
-                val responseFallback = httpClient.patch("https://api.cloudflare.com/client/v4/zones/${appConfig.cloudflareZoneId}/dns_records/${appConfig.cloudflareRecordId}") {
-                    headers {
-                        append("Accept", "application/json")
-                        if (usingTokenNow) {
-                            append("Authorization", "Bearer ${appConfig.cloudflareApiToken}")
-                        } else {
-                            if (appConfig.cloudflareApiEmail.isNotEmpty()) append("X-Auth-Email", appConfig.cloudflareApiEmail)
-                            if (appConfig.cloudflareApiKey.isNotEmpty()) append("X-Auth-Key", appConfig.cloudflareApiKey)
-                        }
-                    }
-                    contentType(ContentType.Application.Json)
-                    setBody(body)
-                }
-                if (responseFallback.status == HttpStatusCode.OK) {
-                    Log.d(TAG, "DNS record updated successfully (fallback auth)")
+                conn.outputStream.bufferedWriter().use { it.write(body) }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    Log.d(TAG, "DNS record updated successfully")
                     return
                 } else {
-                    val fbErr = try { responseFallback.body<String>() } catch (e: Exception) { "<no body>" }
-                    Log.e(TAG, "Cloudflare update failed (fallback ${responseFallback.status}). body=${fbErr}")
+                    val err = try { conn.errorStream?.bufferedReader()?.use { it.readText() } } catch (_: Exception) { null }
+                    Log.e(TAG, "Cloudflare update failed (${code}). body=${err ?: "<no body>"}")
                 }
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating DNS record", e)
         }
     }
     
-    private fun isPcOnline(): Boolean {
-        return try {
-            // Try SSH port first
-            var socket: Socket? = null
-            try {
-                socket = Socket(appConfig.pcIpAddress, 22)
-                return true
-            } catch (e: Exception) {
-                // SSH failed, try RDP
-                try {
-                    socket = Socket(appConfig.pcIpAddress, 3389)
-                    return true
-                } catch (e: Exception) {
-                    return false
-                }
-            } finally {
-                socket?.close()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking PC status", e)
-            false
-        }
-    }
+    private fun isPcOnline(): Boolean = ControlActions.isPcOnline(appConfig.pcIpAddress, appConfig.pcProbePort)
     
     private suspend fun sendTelegramMessage(message: String) {
         try {
-            val response = httpClient.post("https://api.telegram.org/bot${appConfig.telegramBotToken}/sendMessage") {
-                contentType(ContentType.Application.Json)
-                setBody(mapOf(
-                    "chat_id" to appConfig.telegramChatId,
-                    "text" to message
-                ))
-            }
-            
-            if (response.status != HttpStatusCode.OK) {
-                val errorBody = try { response.body<String>() } catch (e: Exception) { "<no body>" }
-                Log.e(TAG, "Failed to send Telegram message: ${response.status} body=${errorBody}")
+            val payload = "{" +
+                "\"chat_id\":\"${appConfig.telegramChatId}\"," +
+                "\"text\":\"" + message.replace("\"", "\\\"") + "\"" +
+                "}"
+            val url = URL("https://api.telegram.org/bot${appConfig.telegramBotToken}/sendMessage")
+            var conn: HttpsURLConnection? = null
+            try {
+                conn = (url.openConnection() as HttpsURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    doOutput = true
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "application/json")
+                }
+                conn.outputStream.bufferedWriter().use { it.write(payload) }
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    val err = try { conn.errorStream?.bufferedReader()?.use { it.readText() } } catch (_: Exception) { null }
+                    Log.e(TAG, "Failed to send Telegram message: ${code} body=${err ?: "<no body>"}")
+                }
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending Telegram message", e)

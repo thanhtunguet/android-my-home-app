@@ -3,6 +3,8 @@ package info.thanhtunguet.myhome
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -14,9 +16,11 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import javax.net.ssl.SSLHandshakeException
 
 class HttpServer(private val appConfig: AppConfig) {
-    private val serverScope = CoroutineScope(Dispatchers.IO)
+    private val serverJob = SupervisorJob()
+    private val serverScope = CoroutineScope(Dispatchers.IO + serverJob)
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     
@@ -57,44 +61,59 @@ class HttpServer(private val appConfig: AppConfig) {
     
     fun stop() {
         isRunning = false
-        try {
-            serverSocket?.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing server socket", e)
-        }
+        try { serverSocket?.close() } catch (e: Exception) { Log.e(TAG, "Error closing server socket", e) }
         serverSocket = null
+        serverJob.cancel()
         Log.d(TAG, "HTTP server stopped")
     }
     
     private fun handleRequest(clientSocket: Socket) {
+        try { clientSocket.soTimeout = 5000 } catch (_: Exception) {}
         serverScope.launch {
             try {
-                val reader = BufferedReader(InputStreamReader(clientSocket.getInputStream()))
-                val writer = PrintWriter(OutputStreamWriter(clientSocket.getOutputStream()))
+                var reader: BufferedReader? = null
+                var writer: PrintWriter? = null
+                reader = BufferedReader(InputStreamReader(clientSocket.getInputStream(), Charsets.UTF_8))
+                writer = PrintWriter(OutputStreamWriter(clientSocket.getOutputStream(), Charsets.UTF_8), /*autoFlush=*/true)
                 
-                // Read the request line
-                val requestLine = reader.readLine()
+                // Read the request line with timeout handling
+                val requestLine = try {
+                    reader.readLine()
+                } catch (toe: java.net.SocketTimeoutException) {
+                    // Timed out waiting for the first line → reply 408
+                    writer?.let { sendResponse(it, 408, "Request Timeout", "") }
+                    return@launch
+                }
                 Log.d(TAG, "Received request: $requestLine")
                 
                 // Parse the request
-                val parts = requestLine.split(" ")
-                if (parts.size >= 2) {
-                    val method = parts[0]
-                    val path = parts[1]
-                    
-                    when (path) {
-                        "/turn-on" -> handleTurnOn(writer)
-                        "/turn-off" -> handleTurnOff(writer)
-                        "/is-online" -> handleIsOnline(writer)
-                        else -> handleNotFound(writer)
-                    }
+                if (requestLine == null || requestLine.isBlank()) {
+                    writer?.let { handleNotFound(it) }
                 } else {
-                    handleNotFound(writer)
+                    val parts = requestLine.split(" ")
+                    if (parts.size >= 2) {
+                        val method = parts[0]
+                        val path = parts[1]
+                    
+                        when (path) {
+                            "/turn-on" -> writer?.let { handleTurnOn(it) }
+                            "/turn-off" -> writer?.let { handleTurnOff(it) }
+                            "/is-online" -> writer?.let { handleIsOnline(it) }
+                            else -> writer?.let { handleNotFound(it) }
+                        }
+                    } else {
+                        writer?.let { handleNotFound(it) }
+                    }
                 }
                 
-                writer.close()
-                reader.close()
-                clientSocket.close()
+                try { writer?.flush() } catch (_: Exception) {}
+                try { writer?.close() } catch (_: Exception) {}
+                try { reader?.close() } catch (_: Exception) {}
+                try { clientSocket.close() } catch (_: Exception) {}
+            } catch (e: SSLHandshakeException) {
+                // A client attempted to speak HTTPS/TLS to this HTTP-only server; close quietly
+                Log.w(TAG, "HTTPS/TLS connection attempted; closing")
+                try { clientSocket.close() } catch (_: Exception) {}
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling request", e)
             }
